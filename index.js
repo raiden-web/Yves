@@ -5,7 +5,7 @@
 // ✅ session timeout 10 นาที
 // ✅ ไม่ชน cancel booking
 // ============================================================
-
+process.env.TZ = "Asia/Bangkok";
 const express = require("express");
 const line = require("@line/bot-sdk");
 const cron = require("node-cron");
@@ -35,8 +35,8 @@ const SLOTS = [
   "16:00",
   "17:00",
   "18:00",
-  "19:00",
-  "20:00",
+  
+  
 ];
 
 const REMIND_BEFORE_MIN = [60, 15];
@@ -149,9 +149,12 @@ function getCurrentTimeSlot() {
 }
 
 function nowTH() {
-  return new Date();
+  return new Date(
+    new Date().toLocaleString("en-US", {
+      timeZone: "Asia/Bangkok",
+    })
+  );
 }
-
 // ============================================================
 // WAITLIST
 // ============================================================
