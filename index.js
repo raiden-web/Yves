@@ -13,8 +13,8 @@ const cron = require("node-cron");
 const app = express();
 
 const config = {
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || "YOUR_CHANNEL_ACCESS_TOKEN",
-  channelSecret: process.env.LINE_CHANNEL_SECRET || "YOUR_CHANNEL_SECRET",
+  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
+  channelSecret: process.env.LINE_CHANNEL_SECRET,
 };
 const client = new line.Client(config);
 
@@ -265,10 +265,29 @@ async function handleMessage(event) {
     }
     const m = text.match(/^ยกเลิกรหัส:(BK\d+)$/);
     if (m) return confirmCancel(event, userId, m[1]);
+    // ข้อความอื่นระหว่าง cancel flow
+    return client.replyMessage(event.replyToken, {
+      type: "text",
+      text: "กรุณาเลือกจากปุ่มด้านบนค่ะ 🙏",
+    });
   }
 
   // --- Booking flow ---
-  if (pendingBooking[userId]) return handleBookingFlow(event, userId, text);
+  if (pendingBooking[userId]) {
+    const isValidInput =
+      text.match(/^เลือกเวลา:\d{2}:\d{2}$/) ||
+      text.match(/^เลือกห้อง:.+$/) ||
+      text === "ยืนยันการจอง" ||
+      text === "ยกเลิกการจอง";
+
+    if (!isValidInput) {
+      return client.replyMessage(event.replyToken, {
+        type: "text",
+        text: "กรุณาเลือกจากปุ่มด้านบนค่ะ 🙏",
+      });
+    }
+    return handleBookingFlow(event, userId, text);
+  }
 
   // --- Cancel select ---
   const cancelMatch = text.match(/^ยกเลิกรหัส:(BK\d+)$/);
@@ -491,5 +510,5 @@ app.post("/webhook", line.middleware(config), (req, res) => {
 
 app.get("/", (_, res) => res.send("LINE Bot Massage Booking v2 ✅"));
 
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
