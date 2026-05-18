@@ -491,5 +491,5 @@ app.post("/webhook", line.middleware(config), (req, res) => {
 
 app.get("/", (_, res) => res.send("LINE Bot Massage Booking v2 ✅"));
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
