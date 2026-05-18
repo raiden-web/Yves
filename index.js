@@ -761,10 +761,8 @@ app.get("/", (_, res) => {
     "LINE Bot Massage Booking FIXED ✅"
   );
 });
-
-
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+app.get("/", (_, res) => {
+  res.send("LINE Bot Running ✅");
 });
 
 const PORT = process.env.PORT || 3000;
