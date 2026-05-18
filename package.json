@@ -1,0 +1,18 @@
+{
+  "name": "linebot-massage-booking",
+  "version": "2.0.0",
+  "description": "LINE Bot สำหรับจองห้องนวด + แจ้งเตือน + ยกเลิก",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "@line/bot-sdk": "^9.3.0",
+    "express": "^4.18.2",
+    "node-cron": "^3.0.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  }
+}
