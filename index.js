@@ -1,11 +1,15 @@
 // ============================================================
-// LINE Bot - ระบบจองห้องนวด (v2 FIXED)
-// ✅ แก้บัค booking flow ค้าง
-// ✅ reset session อัตโนมัติ
-// ✅ session timeout 10 นาที
-// ✅ ไม่ชน cancel booking
+// LINE Bot - ระบบจองห้องนวด (FINAL)
+// ✅ จองห้อง
+// ✅ Walk-in
+// ✅ ยกเลิกการจอง
+// ✅ Confirm ก่อนยกเลิก
+// ✅ แจ้งเตือนก่อนนัด
+// ✅ กัน flow บัค
 // ============================================================
+
 process.env.TZ = "Asia/Bangkok";
+
 const express = require("express");
 const line = require("@line/bot-sdk");
 const cron = require("node-cron");
@@ -23,7 +27,12 @@ const client = new line.Client(config);
 // CONFIG
 // ============================================================
 
-const ROOMS = ["ห้อง A", "ห้อง B", "ห้อง C", "ห้อง D"];
+const ROOMS = [
+  "ห้อง A",
+  "ห้อง B",
+  "ห้อง C",
+  "ห้อง D",
+];
 
 const SLOTS = [
   "10:00",
@@ -35,19 +44,22 @@ const SLOTS = [
   "16:00",
   "17:00",
   "18:00",
-
+  "19:00",
+  "20:00",
 ];
 
 const REMIND_BEFORE_MIN = [60, 15];
 
 // ============================================================
-// DATA STORE
+// DATA
 // ============================================================
 
 const bookingList = {};
+
 const waitlist = {};
 
 const pendingBooking = {};
+
 const pendingCancel = {};
 
 let bookingCounter = 1000;
@@ -70,7 +82,16 @@ function getTomorrowStr() {
   return d.toISOString().split("T")[0];
 }
 
+function nowTH() {
+  return new Date(
+    new Date().toLocaleString("en-US", {
+      timeZone: "Asia/Bangkok",
+    })
+  );
+}
+
 function formatDateTH(dateStr) {
+
   const [y, m, d] = dateStr.split("-");
 
   const months = [
@@ -88,12 +109,13 @@ function formatDateTH(dateStr) {
     "ธ.ค.",
   ];
 
-  return `${parseInt(d)} ${months[parseInt(m) - 1]} ${
-    parseInt(y) + 543
-  }`;
+  return `${parseInt(d)} ${
+    months[parseInt(m) - 1]
+  } ${parseInt(y) + 543}`;
 }
 
 function getBookedRooms(dateStr, timeSlot) {
+
   return Object.values(bookingList)
     .filter(
       (b) =>
@@ -105,61 +127,59 @@ function getBookedRooms(dateStr, timeSlot) {
 }
 
 function getAvailableRooms(dateStr, timeSlot) {
-  const booked = getBookedRooms(dateStr, timeSlot);
-  return ROOMS.filter((r) => !booked.includes(r));
+
+  const booked = getBookedRooms(
+    dateStr,
+    timeSlot
+  );
+
+  return ROOMS.filter(
+    (r) => !booked.includes(r)
+  );
 }
 
 function getAvailableSlots(dateStr) {
+
   return SLOTS.filter(
-    (slot) => getAvailableRooms(dateStr, slot).length > 0
+    (slot) =>
+      getAvailableRooms(dateStr, slot)
+        .length > 0
   );
-}
-
-function isFullyBooked(dateStr) {
-  return getAvailableSlots(dateStr).length === 0;
-}
-
-function getUserActiveBookings(userId) {
-  return Object.entries(bookingList)
-    .filter(
-      ([, b]) =>
-        b.userId === userId &&
-        b.status === "active"
-    )
-    .map(([id, b]) => ({
-      bookingId: id,
-      ...b,
-    }));
 }
 
 function getCurrentTimeSlot() {
-  const now = new Date();
 
-  const hhmm = `${String(now.getHours()).padStart(
-    2,
-    "0"
-  )}:${String(now.getMinutes()).padStart(2, "0")}`;
+  const now = nowTH();
 
-  for (let i = SLOTS.length - 1; i >= 0; i--) {
-    if (SLOTS[i] <= hhmm) return SLOTS[i];
+  const hhmm = `${String(
+    now.getHours()
+  ).padStart(2, "0")}:${String(
+    now.getMinutes()
+  ).padStart(2, "0")}`;
+
+  for (
+    let i = SLOTS.length - 1;
+    i >= 0;
+    i--
+  ) {
+    if (SLOTS[i] <= hhmm) {
+      return SLOTS[i];
+    }
   }
 
   return null;
-}
-
-function nowTH() {
-  return new Date(
-    new Date().toLocaleString("en-US", {
-      timeZone: "Asia/Bangkok",
-    })
-  );
 }
 
 // ============================================================
 // WAITLIST
 // ============================================================
 
-function addToWaitlist(userId, dateStr, timeSlot) {
+function addToWaitlist(
+  userId,
+  dateStr,
+  timeSlot
+) {
+
   const key = `${dateStr}|${timeSlot}`;
 
   if (!waitlist[key]) {
@@ -171,26 +191,32 @@ function addToWaitlist(userId, dateStr, timeSlot) {
   }
 }
 
-async function notifyWaitlist(dateStr, timeSlot) {
+async function notifyWaitlist(
+  dateStr,
+  timeSlot
+) {
+
   const key = `${dateStr}|${timeSlot}`;
+
   const users = waitlist[key] || [];
 
   if (!users.length) return;
 
-  const dateTH = formatDateTH(dateStr);
-
   for (const uid of users) {
+
     try {
+
       await client.pushMessage(uid, {
         type: "text",
         text:
-          `🔔 มีห้องว่างแล้วค่ะ!\n\n` +
-          `📅 ${dateTH}\n` +
-          `⏰ ${timeSlot} น.\n\n` +
-          `พิมพ์ "จองห้องนวด" เพื่อจองได้เลยค่ะ ✨`,
+          `🔔 มีห้องว่างแล้วค่ะ\n\n` +
+          `📅 ${formatDateTH(dateStr)}\n` +
+          `⏰ ${timeSlot}\n\n` +
+          `พิมพ์ "จองห้องนวด" เพื่อจองได้เลยค่ะ`,
       });
+
     } catch (e) {
-      console.error(e.message);
+      console.log(e.message);
     }
   }
 
@@ -202,24 +228,32 @@ async function notifyWaitlist(dateStr, timeSlot) {
 // ============================================================
 
 cron.schedule("* * * * *", async () => {
+
   const now = nowTH();
 
-  const todayStr = now.toISOString().split("T")[0];
+  const today =
+    now.toISOString().split("T")[0];
 
-  const currentHHMM =
-    `${String(now.getHours()).padStart(2, "0")}:` +
-    `${String(now.getMinutes()).padStart(2, "0")}`;
+  const currentHHMM = `${String(
+    now.getHours()
+  ).padStart(2, "0")}:${String(
+    now.getMinutes()
+  ).padStart(2, "0")}`;
 
-  for (const [bookingId, b] of Object.entries(bookingList)) {
+  for (const [id, b] of Object.entries(
+    bookingList
+  )) {
+
     if (
       b.status !== "active" ||
-      b.date !== todayStr
+      b.date !== today
     ) {
       continue;
     }
 
     for (const minBefore of REMIND_BEFORE_MIN) {
-      const remindKey = `remind_${minBefore}`;
+
+      const remindKey = `r_${minBefore}`;
 
       if (
         b.remindedAt &&
@@ -228,43 +262,42 @@ cron.schedule("* * * * *", async () => {
         continue;
       }
 
-      const [slotH, slotM] = b.time
+      const [h, m] = b.time
         .split(":")
         .map(Number);
 
-      const remindTotalMin =
-        slotH * 60 + slotM - minBefore;
+      const total =
+        h * 60 + m - minBefore;
 
-      const remindHHMM =
-        `${String(
-          Math.floor(remindTotalMin / 60)
-        ).padStart(2, "0")}:` +
-        `${String(remindTotalMin % 60).padStart(
-          2,
-          "0"
-        )}`;
+      const hhmm = `${String(
+        Math.floor(total / 60)
+      ).padStart(2, "0")}:${String(
+        total % 60
+      ).padStart(2, "0")}`;
 
-      if (currentHHMM === remindHHMM) {
+      if (hhmm === currentHHMM) {
+
         try {
+
           const msg =
             minBefore === 60
-              ? `🔔 อีก 1 ชั่วโมงถึงเวลานวดค่ะ`
-              : `⏰ อีก 15 นาทีถึงเวลานวดแล้วค่ะ`;
+              ? `🔔 อีก 1 ชั่วโมงถึงเวลานวดค่ะ\n\n⏰ ${b.time}\n🛁 ${b.room}`
+              : `⏰ อีก 15 นาทีถึงเวลานวดค่ะ\n\n⏰ ${b.time}\n🛁 ${b.room}`;
 
-          await client.pushMessage(b.userId, {
-            type: "text",
-            text:
-              `${msg}\n\n` +
-              `📅 ${formatDateTH(b.date)}\n` +
-              `⏰ ${b.time} น.\n` +
-              `🛁 ${b.room}`,
-          });
-
-          bookingList[bookingId].remindedAt.add(
-            remindKey
+          await client.pushMessage(
+            b.userId,
+            {
+              type: "text",
+              text: msg,
+            }
           );
+
+          bookingList[
+            id
+          ].remindedAt.add(remindKey);
+
         } catch (e) {
-          console.error(e.message);
+          console.log(e.message);
         }
       }
     }
@@ -276,412 +309,46 @@ cron.schedule("* * * * *", async () => {
 // ============================================================
 
 async function sendMainMenu(event) {
-  return client.replyMessage(event.replyToken, {
-    type: "template",
-    altText: "เมนูหลัก",
-    template: {
-      type: "buttons",
-      title: "🛁 ระบบจองห้องนวด",
-      text: "เลือกเมนูที่ต้องการ",
-      actions: [
-        {
-          type: "message",
-          label: "📅 จองล่วงหน้า",
-          text: "จองห้องนวด",
-        },
-        {
-          type: "message",
-          label: "🚶 Walk in",
-          text: "walk in",
-        },
-        {
-          type: "message",
-          label: "📋 ดูการจอง",
-          text: "การจองของฉัน",
-        },
-        {
-          type: "message",
-          label: "❌ ยกเลิกการจอง",
-          text: "ยกเลิกการจอง",
-        },
-      ],
-    },
-  });
-}
 
-// ============================================================
-// BOOKING START
-// ============================================================
-
-async function sendBookingStart(event, userId) {
-  const tomorrow = getTomorrowStr();
-
-  if (isFullyBooked(tomorrow)) {
-    return client.replyMessage(event.replyToken, {
+  return client.replyMessage(
+    event.replyToken,
+    {
       type: "text",
-      text: "❌ วันพรุ่งนี้เต็มแล้วค่ะ",
-    });
-  }
+      text:
+        "🛁 ระบบจองห้องนวด\nกรุณาเลือกเมนู 👇",
 
-  const freeSlots = getAvailableSlots(tomorrow);
-
-  pendingBooking[userId] = {
-    step: "choose_time",
-    date: tomorrow,
-    updatedAt: Date.now(),
-  };
-
-  return client.replyMessage(event.replyToken, {
-    type: "text",
-    text:
-      `📅 จองห้องนวด (${formatDateTH(
-        tomorrow
-      )})\n\n` +
-      `กรุณาเลือกเวลา 👇`,
-    quickReply: {
-      items: freeSlots.map((slot) => ({
-        type: "action",
-        action: {
-          type: "message",
-          label: slot,
-          text: `เลือกเวลา:${slot}`,
-        },
-      })),
-    },
-  });
-}
-
-// ============================================================
-// BOOKING FLOW
-// ============================================================
-
-async function handleBookingFlow(
-  event,
-  userId,
-  text
-) {
-  const state = pendingBooking[userId];
-
-  // ==========================
-  // choose time
-  // ==========================
-
-  if (state.step === "choose_time") {
-    const match = text.match(
-      /^เลือกเวลา:(\d{2}:\d{2})$/
-    );
-
-    if (!match) {
-      return client.replyMessage(
-        event.replyToken,
-        {
-          type: "text",
-          text: "กรุณาเลือกเวลาจากปุ่มค่ะ 🙏",
-        }
-      );
-    }
-
-    const time = match[1];
-
-    const available = getAvailableRooms(
-      state.date,
-      time
-    );
-
-    if (!available.length) {
-      delete pendingBooking[userId];
-
-      return client.replyMessage(
-        event.replyToken,
-        {
-          type: "text",
-          text: "❌ เวลานี้เต็มแล้วค่ะ",
-        }
-      );
-    }
-
-    pendingBooking[userId] = {
-      ...state,
-      step: "choose_room",
-      time,
-      updatedAt: Date.now(),
-    };
-
-    return client.replyMessage(event.replyToken, {
-      type: "text",
-      text: `🛁 กรุณาเลือกห้อง 👇`,
       quickReply: {
-        items: available.map((room) => ({
-          type: "action",
-          action: {
-            type: "message",
-            label: room,
-            text: `เลือกห้อง:${room}`,
-          },
-        })),
-      },
-    });
-  }
-
-  // ==========================
-  // choose room
-  // ==========================
-
-  if (state.step === "choose_room") {
-    const match = text.match(/^เลือกห้อง:(.+)$/);
-
-    if (!match) {
-      return client.replyMessage(
-        event.replyToken,
-        {
-          type: "text",
-          text: "กรุณาเลือกห้องจากปุ่มค่ะ 🙏",
-        }
-      );
-    }
-
-    const room = match[1];
-
-    pendingBooking[userId] = {
-      ...state,
-      room,
-      step: "confirm",
-      updatedAt: Date.now(),
-    };
-
-    return client.replyMessage(event.replyToken, {
-      type: "template",
-      altText: "ยืนยันการจอง",
-      template: {
-        type: "confirm",
-        text:
-          `📋 ยืนยันการจอง\n\n` +
-          `📅 ${formatDateTH(state.date)}\n` +
-          `⏰ ${state.time}\n` +
-          `🛁 ${room}`,
-        actions: [
+        items: [
           {
-            type: "message",
-            label: "✅ ยืนยัน",
-            text: "ยืนยันการจอง",
+            type: "action",
+            action: {
+              type: "message",
+              label: "📅 จองล่วงหน้า",
+              text: "จองห้องนวด",
+            },
           },
+
           {
-            type: "message",
-            label: "❌ ยกเลิก",
-            text: "ยกเลิกขั้นตอนจอง",
+            type: "action",
+            action: {
+              type: "message",
+              label: "🚶 Walk in",
+              text: "walk in",
+            },
+          },
+
+          {
+            type: "action",
+            action: {
+              type: "message",
+              label: "❌ ยกเลิกการจอง",
+              text: "ยกเลิกการจอง",
+            },
           },
         ],
       },
-    });
-  }
-
-  // ==========================
-  // confirm
-  // ==========================
-
-  if (state.step === "confirm") {
-    if (text === "ยืนยันการจอง") {
-      const bookingId = genBookingId();
-
-      bookingList[bookingId] = {
-        userId,
-        date: state.date,
-        time: state.time,
-        room: state.room,
-        status: "active",
-        remindedAt: new Set(),
-      };
-
-      delete pendingBooking[userId];
-
-      return client.replyMessage(event.replyToken, {
-        type: "text",
-        text:
-          `🎉 จองสำเร็จ!\n\n` +
-          `🔖 ${bookingId}\n` +
-          `📅 ${formatDateTH(state.date)}\n` +
-          `⏰ ${state.time}\n` +
-          `🛁 ${state.room}`,
-      });
     }
-
-    delete pendingBooking[userId];
-
-    return client.replyMessage(event.replyToken, {
-      type: "text",
-      text: "❌ ยกเลิกขั้นตอนการจองแล้วค่ะ",
-    });
-  }
-}
-
-// ============================================================
-// MESSAGE HANDLER
-// ============================================================
-
-async function handleMessage(event) {
-  if (
-    event.type !== "message" ||
-    event.message.type !== "text"
-  ) {
-    return;
-  }
-
-  const userId = event.source.userId;
-  const text = event.message.text.trim();
-  const lower = text.toLowerCase();
-
-  // ==========================================================
-  // SESSION TIMEOUT
-  // ==========================================================
-
-  if (pendingBooking[userId]) {
-    const state = pendingBooking[userId];
-
-    if (
-      state.updatedAt &&
-      Date.now() - state.updatedAt >
-        10 * 60 * 1000
-    ) {
-      delete pendingBooking[userId];
-
-      return client.replyMessage(
-        event.replyToken,
-        {
-          type: "text",
-          text:
-            "⌛ ขั้นตอนการจองหมดเวลาแล้วค่ะ\n\nกรุณาเริ่มใหม่ 😊",
-        }
-      );
-    }
-  }
-
-  // ==========================================================
-  // BOOKING FLOW
-  // ==========================================================
-
-  if (pendingBooking[userId]) {
-
-    // ออกจาก flow
-    if (
-      /(ยกเลิกขั้นตอนจอง|ออก|cancel|menu|เมนูหลัก)/i.test(
-        lower
-      )
-    ) {
-      delete pendingBooking[userId];
-
-      return client.replyMessage(
-        event.replyToken,
-        {
-          type: "text",
-          text:
-            "❌ ออกจากขั้นตอนการจองแล้วค่ะ",
-        }
-      );
-    }
-
-    // ถ้าพิมพ์เมนูอื่น
-    if (
-      /(walk.?in|ห้องว่าง|มีห้อง)/i.test(
-        lower
-      ) ||
-      /(ดูการจอง|การจองของฉัน)/i.test(
-        lower
-      )
-    ) {
-      delete pendingBooking[userId];
-    } else {
-
-      const isValidInput =
-        text.match(/^เลือกเวลา:\d{2}:\d{2}$/) ||
-        text.match(/^เลือกห้อง:.+$/) ||
-        text === "ยืนยันการจอง";
-
-      if (!isValidInput) {
-
-        delete pendingBooking[userId];
-
-        return client.replyMessage(
-          event.replyToken,
-          {
-            type: "text",
-            text:
-              "❌ ระบบยกเลิก flow เดิมแล้วค่ะ\nกรุณาเริ่มใหม่ 😊",
-          }
-        );
-      }
-
-      pendingBooking[userId].updatedAt =
-        Date.now();
-
-      return handleBookingFlow(
-        event,
-        userId,
-        text
-      );
-    }
-  }
-
-  // ==========================================================
-  // KEYWORDS
-  // ==========================================================
-
-  if (
-    /(จอง|book|reserve)/i.test(lower)
-  ) {
-    return sendBookingStart(event, userId);
-  }
-
-  if (
-    /(walk.?in|ห้องว่าง|มีห้อง)/i.test(
-      lower
-    )
-  ) {
-    return sendWalkInStatus(event);
-  }
-
-  if (
-    /(ดูการจอง|การจองของฉัน)/i.test(
-      lower
-    )
-  ) {
-    return sendMyBookings(event, userId);
-  }
-
-  return sendMainMenu(event);
-}
-
-// ============================================================
-// MY BOOKINGS
-// ============================================================
-
-async function sendMyBookings(event, userId) {
-  const active =
-    getUserActiveBookings(userId);
-
-  if (!active.length) {
-    return client.replyMessage(
-      event.replyToken,
-      {
-        type: "text",
-        text: "ยังไม่มีการจองค่ะ",
-      }
-    );
-  }
-
-  const textList = active
-    .map(
-      (b) =>
-        `🔖 ${b.bookingId}\n` +
-        `📅 ${formatDateTH(b.date)}\n` +
-        `⏰ ${b.time}\n` +
-        `🛁 ${b.room}`
-    )
-    .join("\n\n");
-
-  return client.replyMessage(event.replyToken, {
-    type: "text",
-    text: `📋 การจองของคุณ\n\n${textList}`,
-  });
+  );
 }
 
 // ============================================================
@@ -689,18 +356,20 @@ async function sendMyBookings(event, userId) {
 // ============================================================
 
 async function sendWalkInStatus(event) {
+
   const today = getTodayStr();
 
   const currentSlot =
     getCurrentTimeSlot();
 
   if (!currentSlot) {
+
     return client.replyMessage(
       event.replyToken,
       {
         type: "text",
         text:
-          "⏰ ตอนนี้ยังไม่เปิดบริการค่ะ",
+          "⏰ เปิดบริการ 10:00 - 20:00 น.",
       }
     );
   }
@@ -724,18 +393,573 @@ async function sendWalkInStatus(event) {
         type: "text",
         text:
           `❌ เวลา ${currentSlot} เต็มแล้วค่ะ\n\n` +
-          `ระบบเพิ่มเข้าคิวรอแจ้งเตือนแล้ว ✨`,
+          `📩 หากมีการยกเลิก ระบบจะแจ้งเตือนให้อัตโนมัติ`,
       }
     );
   }
 
-  return client.replyMessage(event.replyToken, {
-    type: "text",
-    text:
-      `✅ มีห้องว่าง\n\n` +
-      `⏰ ${currentSlot}\n` +
-      `${available.join("\n")}`,
-  });
+  return client.replyMessage(
+    event.replyToken,
+    {
+      type: "text",
+      text:
+        `✅ มีห้องว่าง\n\n` +
+        `⏰ ${currentSlot}\n\n` +
+        available
+          .map((r) => `• ${r}`)
+          .join("\n"),
+    }
+  );
+}
+
+// ============================================================
+// BOOKING START
+// ============================================================
+
+async function sendBookingStart(
+  event,
+  userId
+) {
+
+  const tomorrow =
+    getTomorrowStr();
+
+  const freeSlots =
+    getAvailableSlots(tomorrow);
+
+  if (!freeSlots.length) {
+
+    return client.replyMessage(
+      event.replyToken,
+      {
+        type: "text",
+        text:
+          "❌ วันพรุ่งนี้เต็มแล้วค่ะ",
+      }
+    );
+  }
+
+  pendingBooking[userId] = {
+    step: "choose_time",
+    date: tomorrow,
+  };
+
+  return client.replyMessage(
+    event.replyToken,
+    {
+      type: "text",
+      text:
+        `📅 เลือกเวลาที่ต้องการ\n` +
+        `${formatDateTH(tomorrow)}`,
+
+      quickReply: {
+        items: freeSlots.map((slot) => ({
+          type: "action",
+          action: {
+            type: "message",
+            label: slot,
+            text: `เลือกเวลา:${slot}`,
+          },
+        })),
+      },
+    }
+  );
+}
+
+// ============================================================
+// BOOKING FLOW
+// ============================================================
+
+async function handleBookingFlow(
+  event,
+  userId,
+  text
+) {
+
+  const state =
+    pendingBooking[userId];
+
+  // ----------------------------------------------------------
+
+  if (state.step === "choose_time") {
+
+    const match =
+      text.match(
+        /^เลือกเวลา:(\d{2}:\d{2})$/
+      );
+
+    if (!match) {
+
+      delete pendingBooking[userId];
+
+      return client.replyMessage(
+        event.replyToken,
+        {
+          type: "text",
+          text:
+            "❌ ระบบยกเลิกขั้นตอนเดิมแล้ว กรุณาเริ่มใหม่ค่ะ",
+        }
+      );
+    }
+
+    const time = match[1];
+
+    const available =
+      getAvailableRooms(
+        state.date,
+        time
+      );
+
+    if (!available.length) {
+
+      delete pendingBooking[userId];
+
+      return client.replyMessage(
+        event.replyToken,
+        {
+          type: "text",
+          text:
+            "❌ เวลานี้เต็มแล้ว กรุณาจองใหม่",
+        }
+      );
+    }
+
+    pendingBooking[userId] = {
+      ...state,
+      step: "choose_room",
+      time,
+    };
+
+    return client.replyMessage(
+      event.replyToken,
+      {
+        type: "text",
+        text:
+          `⏰ ${time}\nเลือกห้อง 👇`,
+
+        quickReply: {
+          items: available.map(
+            (room) => ({
+              type: "action",
+              action: {
+                type: "message",
+                label: room,
+                text: `เลือกห้อง:${room}`,
+              },
+            })
+          ),
+        },
+      }
+    );
+  }
+
+  // ----------------------------------------------------------
+
+  if (state.step === "choose_room") {
+
+    const match =
+      text.match(/^เลือกห้อง:(.+)$/);
+
+    if (!match) {
+
+      delete pendingBooking[userId];
+
+      return client.replyMessage(
+        event.replyToken,
+        {
+          type: "text",
+          text:
+            "❌ ระบบยกเลิกขั้นตอนเดิมแล้ว กรุณาเริ่มใหม่ค่ะ",
+        }
+      );
+    }
+
+    const room = match[1];
+
+    pendingBooking[userId] = {
+      ...state,
+      step: "confirm",
+      room,
+    };
+
+    return client.replyMessage(
+      event.replyToken,
+      {
+        type: "template",
+        altText: "ยืนยันการจอง",
+        template: {
+          type: "confirm",
+
+          text:
+            `📋 ยืนยันการจอง\n\n` +
+            `📅 ${formatDateTH(
+              state.date
+            )}\n` +
+            `⏰ ${state.time}\n` +
+            `🛁 ${room}`,
+
+          actions: [
+            {
+              type: "message",
+              label: "✅ ยืนยัน",
+              text: "ยืนยันการจอง",
+            },
+
+            {
+              type: "message",
+              label: "❌ ยกเลิก",
+              text: "ยกเลิกขั้นตอนจอง",
+            },
+          ],
+        },
+      }
+    );
+  }
+
+  // ----------------------------------------------------------
+
+  if (state.step === "confirm") {
+
+    if (text !== "ยืนยันการจอง") {
+
+      delete pendingBooking[userId];
+
+      return client.replyMessage(
+        event.replyToken,
+        {
+          type: "text",
+          text:
+            "❌ ยกเลิกขั้นตอนจองแล้วค่ะ",
+        }
+      );
+    }
+
+    const bookingId = genBookingId();
+
+    bookingList[bookingId] = {
+      userId,
+      date: state.date,
+      time: state.time,
+      room: state.room,
+      status: "active",
+      remindedAt: new Set(),
+    };
+
+    delete pendingBooking[userId];
+
+    return client.replyMessage(
+      event.replyToken,
+      {
+        type: "text",
+        text:
+          `🎉 จองสำเร็จ\n\n` +
+          `🔖 ${bookingId}\n` +
+          `📅 ${formatDateTH(
+            state.date
+          )}\n` +
+          `⏰ ${state.time}\n` +
+          `🛁 ${state.room}\n\n` +
+          `🔔 มีแจ้งเตือนก่อนนัด`,
+      }
+    );
+  }
+}
+
+// ============================================================
+// CANCEL FLOW
+// ============================================================
+
+async function startCancelFlow(
+  event,
+  userId
+) {
+
+  const activeBookings =
+    Object.entries(bookingList)
+      .filter(
+        ([, b]) =>
+          b.userId === userId &&
+          b.status === "active"
+      );
+
+  if (!activeBookings.length) {
+
+    return client.replyMessage(
+      event.replyToken,
+      {
+        type: "text",
+        text:
+          "❌ ไม่พบรายการจอง",
+      }
+    );
+  }
+
+  return client.replyMessage(
+    event.replyToken,
+    {
+      type: "text",
+      text:
+        "📋 เลือกรายการที่ต้องการยกเลิก",
+
+      quickReply: {
+        items: activeBookings.map(
+          ([id, b]) => ({
+            type: "action",
+            action: {
+              type: "message",
+              label: `${b.time} ${b.room}`,
+              text: `ยกเลิก:${id}`,
+            },
+          })
+        ),
+      },
+    }
+  );
+}
+
+async function confirmCancelBooking(
+  event,
+  userId,
+  bookingId
+) {
+
+  const booking =
+    bookingList[bookingId];
+
+  if (
+    !booking ||
+    booking.userId !== userId
+  ) {
+
+    return client.replyMessage(
+      event.replyToken,
+      {
+        type: "text",
+        text:
+          "❌ ไม่พบรายการจอง",
+      }
+    );
+  }
+
+  pendingCancel[userId] = {
+    bookingId,
+  };
+
+  return client.replyMessage(
+    event.replyToken,
+    {
+      type: "template",
+      altText: "ยืนยันยกเลิก",
+      template: {
+        type: "confirm",
+
+        text:
+          `⚠️ ยืนยันยกเลิก?\n\n` +
+          `📅 ${formatDateTH(
+            booking.date
+          )}\n` +
+          `⏰ ${booking.time}\n` +
+          `🛁 ${booking.room}`,
+
+        actions: [
+          {
+            type: "message",
+            label: "✅ ยืนยัน",
+            text: "ยืนยันยกเลิก",
+          },
+
+          {
+            type: "message",
+            label: "❌ ไม่ยกเลิก",
+            text: "ไม่ยกเลิก",
+          },
+        ],
+      },
+    }
+  );
+}
+
+async function executeCancelBooking(
+  event,
+  userId
+) {
+
+  const state =
+    pendingCancel[userId];
+
+  if (!state) return;
+
+  const booking =
+    bookingList[state.bookingId];
+
+  if (!booking) {
+
+    delete pendingCancel[userId];
+
+    return client.replyMessage(
+      event.replyToken,
+      {
+        type: "text",
+        text:
+          "❌ ไม่พบรายการจอง",
+      }
+    );
+  }
+
+  booking.status = "cancelled";
+
+  delete pendingCancel[userId];
+
+  await notifyWaitlist(
+    booking.date,
+    booking.time
+  );
+
+  return client.replyMessage(
+    event.replyToken,
+    {
+      type: "text",
+      text:
+        `✅ ยกเลิกการจองสำเร็จ\n\n` +
+        `📅 ${formatDateTH(
+          booking.date
+        )}\n` +
+        `⏰ ${booking.time}\n` +
+        `🛁 ${booking.room}`,
+    }
+  );
+}
+
+// ============================================================
+// MESSAGE HANDLER
+// ============================================================
+
+async function handleMessage(event) {
+
+  if (
+    event.type !== "message" ||
+    event.message.type !== "text"
+  ) {
+    return;
+  }
+
+  const userId =
+    event.source.userId;
+
+  const text =
+    event.message.text.trim();
+
+  const lower = text.toLowerCase();
+
+  // ==========================================================
+  // CANCEL CONFIRM
+  // ==========================================================
+
+  if (pendingCancel[userId]) {
+
+    if (text === "ยืนยันยกเลิก") {
+      return executeCancelBooking(
+        event,
+        userId
+      );
+    }
+
+    if (text === "ไม่ยกเลิก") {
+
+      delete pendingCancel[userId];
+
+      return client.replyMessage(
+        event.replyToken,
+        {
+          type: "text",
+          text:
+            "✅ ยังคงรายการจองเดิมไว้ค่ะ",
+        }
+      );
+    }
+  }
+
+  // ==========================================================
+  // SELECT CANCEL
+  // ==========================================================
+
+  const cancelMatch =
+    text.match(/^ยกเลิก:(BK\d+)$/);
+
+  if (cancelMatch) {
+
+    return confirmCancelBooking(
+      event,
+      userId,
+      cancelMatch[1]
+    );
+  }
+
+  // ==========================================================
+  // BOOKING FLOW
+  // ==========================================================
+
+  if (pendingBooking[userId]) {
+
+    if (
+      text === "ยกเลิกขั้นตอนจอง"
+    ) {
+
+      delete pendingBooking[userId];
+
+      return client.replyMessage(
+        event.replyToken,
+        {
+          type: "text",
+          text:
+            "❌ ยกเลิกขั้นตอนจองแล้ว",
+        }
+      );
+    }
+
+    return handleBookingFlow(
+      event,
+      userId,
+      text
+    );
+  }
+
+  // ==========================================================
+  // KEYWORDS
+  // ==========================================================
+
+  if (
+    /(จอง|book|reserve)/i.test(lower)
+  ) {
+
+    return sendBookingStart(
+      event,
+      userId
+    );
+  }
+
+  if (
+    /(walk.?in|ห้องว่าง|มีห้อง)/i.test(
+      lower
+    )
+  ) {
+
+    return sendWalkInStatus(event);
+  }
+
+  if (
+    /(ยกเลิกการจอง|ยกเลิก)/i.test(
+      lower
+    )
+  ) {
+
+    return startCancelFlow(
+      event,
+      userId
+    );
+  }
+
+  return sendMainMenu(event);
 }
 
 // ============================================================
@@ -746,31 +970,42 @@ app.post(
   "/webhook",
   line.middleware(config),
   (req, res) => {
+
     Promise.all(
-      req.body.events.map(handleMessage)
+      req.body.events.map(
+        handleMessage
+      )
     )
       .then(() =>
-        res.json({ status: "ok" })
+        res.json({
+          status: "ok",
+        })
       )
       .catch((err) => {
-        console.error(err);
+        console.log(err);
         res.status(500).end();
       });
   }
 );
 
+// ============================================================
+// HEALTH CHECK
+// ============================================================
+
 app.get("/", (_, res) => {
-  res.send(
-    "LINE Bot Massage Booking FIXED ✅"
-  );
-});
-app.get("/", (_, res) => {
-  res.send("LINE Bot Running ✅");
+  res.send("LINE BOT RUNNING ✅");
 });
 
-const PORT = process.env.PORT || 3000;
+// ============================================================
+// START SERVER
+// ============================================================
+
+const PORT =
+  process.env.PORT || 3000;
 
 app.listen(PORT, () => {
+
   console.log(
     `🚀 Server running on port ${PORT}`
   );
+});
