@@ -929,23 +929,32 @@ async function handleMessage(event) {
   // ==========================================================
 
   if (
-    /(จอง|book|reserve)/i.test(lower)
-  ) {
+  /(ยกเลิกการจอง|ยกเลิก)/i.test(lower)
+) {
 
-    return sendBookingStart(
-      event,
-      userId
-    );
-  }
+  return startCancelFlow(
+    event,
+    userId
+  );
+}
 
-  if (
-    /(walk.?in|ห้องว่าง|มีห้อง)/i.test(
-      lower
-    )
-  ) {
+if (
+  /(จอง|book|reserve)/i.test(lower) &&
+  !/(ยกเลิก)/i.test(lower)
+) {
 
-    return sendWalkInStatus(event);
-  }
+  return sendBookingStart(
+    event,
+    userId
+  );
+}
+
+if (
+  /(walk.?in|ห้องว่าง|มีห้อง)/i.test(lower)
+) {
+
+  return sendWalkInStatus(event);
+}
 
   if (
     /(ยกเลิกการจอง|ยกเลิก)/i.test(
