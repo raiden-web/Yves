@@ -1,11 +1,5 @@
 // ============================================================
-// LINE Bot - ระบบจองห้องนวด (FINAL)
-// ✅ จองห้อง
-// ✅ Walk-in
-// ✅ ยกเลิกการจอง
-// ✅ Confirm ก่อนยกเลิก
-// ✅ แจ้งเตือนก่อนนัด
-// ✅ กัน flow บัค
+// LINE Bot - ระบบจองห้องนวด FINAL
 // ============================================================
 
 process.env.TZ = "Asia/Bangkok";
@@ -17,8 +11,11 @@ const cron = require("node-cron");
 const app = express();
 
 const config = {
-  channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
-  channelSecret: process.env.LINE_CHANNEL_SECRET,
+  channelAccessToken:
+    process.env.LINE_CHANNEL_ACCESS_TOKEN,
+
+  channelSecret:
+    process.env.LINE_CHANNEL_SECRET,
 };
 
 const client = new line.Client(config);
@@ -32,6 +29,14 @@ const ROOMS = [
   "ห้อง B",
   "ห้อง C",
   "ห้อง D",
+];
+
+const COURSES = [
+  "Facial Treatments",
+  "Hair Treatments",
+  "Body Treatments",
+  "Waxing",
+  "LPG Treatments",
 ];
 
 const SLOTS = [
@@ -55,11 +60,9 @@ const REMIND_BEFORE_MIN = [60, 15];
 // ============================================================
 
 const bookingList = {};
-
 const waitlist = {};
 
 const pendingBooking = {};
-
 const pendingCancel = {};
 
 let bookingCounter = 1000;
@@ -73,26 +76,38 @@ function genBookingId() {
 }
 
 function getTodayStr() {
-  return new Date().toISOString().split("T")[0];
+  return new Date()
+    .toISOString()
+    .split("T")[0];
 }
 
 function getTomorrowStr() {
+
   const d = new Date();
+
   d.setDate(d.getDate() + 1);
-  return d.toISOString().split("T")[0];
+
+  return d
+    .toISOString()
+    .split("T")[0];
 }
 
 function nowTH() {
+
   return new Date(
-    new Date().toLocaleString("en-US", {
-      timeZone: "Asia/Bangkok",
-    })
+    new Date().toLocaleString(
+      "en-US",
+      {
+        timeZone: "Asia/Bangkok",
+      }
+    )
   );
 }
 
 function formatDateTH(dateStr) {
 
-  const [y, m, d] = dateStr.split("-");
+  const [y, m, d] =
+    dateStr.split("-");
 
   const months = [
     "ม.ค.",
@@ -114,7 +129,10 @@ function formatDateTH(dateStr) {
   } ${parseInt(y) + 543}`;
 }
 
-function getBookedRooms(dateStr, timeSlot) {
+function getBookedRooms(
+  dateStr,
+  timeSlot
+) {
 
   return Object.values(bookingList)
     .filter(
@@ -126,24 +144,32 @@ function getBookedRooms(dateStr, timeSlot) {
     .map((b) => b.room);
 }
 
-function getAvailableRooms(dateStr, timeSlot) {
+function getAvailableRooms(
+  dateStr,
+  timeSlot
+) {
 
-  const booked = getBookedRooms(
-    dateStr,
-    timeSlot
-  );
+  const booked =
+    getBookedRooms(
+      dateStr,
+      timeSlot
+    );
 
   return ROOMS.filter(
     (r) => !booked.includes(r)
   );
 }
 
-function getAvailableSlots(dateStr) {
+function getAvailableSlots(
+  dateStr
+) {
 
   return SLOTS.filter(
     (slot) =>
-      getAvailableRooms(dateStr, slot)
-        .length > 0
+      getAvailableRooms(
+        dateStr,
+        slot
+      ).length > 0
   );
 }
 
@@ -162,6 +188,7 @@ function getCurrentTimeSlot() {
     i >= 0;
     i--
   ) {
+
     if (SLOTS[i] <= hhmm) {
       return SLOTS[i];
     }
@@ -180,13 +207,19 @@ function addToWaitlist(
   timeSlot
 ) {
 
-  const key = `${dateStr}|${timeSlot}`;
+  const key =
+    `${dateStr}|${timeSlot}`;
 
   if (!waitlist[key]) {
     waitlist[key] = [];
   }
 
-  if (!waitlist[key].includes(userId)) {
+  if (
+    !waitlist[key].includes(
+      userId
+    )
+  ) {
+
     waitlist[key].push(userId);
   }
 }
@@ -196,9 +229,11 @@ async function notifyWaitlist(
   timeSlot
 ) {
 
-  const key = `${dateStr}|${timeSlot}`;
+  const key =
+    `${dateStr}|${timeSlot}`;
 
-  const users = waitlist[key] || [];
+  const users =
+    waitlist[key] || [];
 
   if (!users.length) return;
 
@@ -206,14 +241,20 @@ async function notifyWaitlist(
 
     try {
 
-      await client.pushMessage(uid, {
-        type: "text",
-        text:
-          `🔔 มีห้องว่างแล้วค่ะ\n\n` +
-          `📅 ${formatDateTH(dateStr)}\n` +
-          `⏰ ${timeSlot}\n\n` +
-          `พิมพ์ "จองห้องนวด" เพื่อจองได้เลยค่ะ`,
-      });
+      await client.pushMessage(
+        uid,
+        {
+          type: "text",
+
+          text:
+            `🔔 มีห้องว่างแล้วค่ะ\n\n` +
+            `📅 ${formatDateTH(
+              dateStr
+            )}\n` +
+            `⏰ ${timeSlot}\n\n` +
+            `กรุณากดเมนูจองอีกครั้ง`,
+        }
+      );
 
     } catch (e) {
       console.log(e.message);
@@ -227,122 +268,161 @@ async function notifyWaitlist(
 // REMINDER
 // ============================================================
 
-cron.schedule("* * * * *", async () => {
+cron.schedule(
+  "* * * * *",
+  async () => {
 
-  const now = nowTH();
+    const now = nowTH();
 
-  const today =
-    now.toISOString().split("T")[0];
+    const today =
+      now
+        .toISOString()
+        .split("T")[0];
 
-  const currentHHMM = `${String(
-    now.getHours()
-  ).padStart(2, "0")}:${String(
-    now.getMinutes()
-  ).padStart(2, "0")}`;
+    const currentHHMM =
+      `${String(
+        now.getHours()
+      ).padStart(2, "0")}:${String(
+        now.getMinutes()
+      ).padStart(2, "0")}`;
 
-  for (const [id, b] of Object.entries(
-    bookingList
-  )) {
-
-    if (
-      b.status !== "active" ||
-      b.date !== today
-    ) {
-      continue;
-    }
-
-    for (const minBefore of REMIND_BEFORE_MIN) {
-
-      const remindKey = `r_${minBefore}`;
+    for (const [id, b]
+      of Object.entries(
+        bookingList
+      )) {
 
       if (
-        b.remindedAt &&
-        b.remindedAt.has(remindKey)
+        b.status !== "active" ||
+        b.date !== today
       ) {
         continue;
       }
 
-      const [h, m] = b.time
-        .split(":")
-        .map(Number);
+      for (const minBefore
+        of REMIND_BEFORE_MIN) {
 
-      const total =
-        h * 60 + m - minBefore;
+        const remindKey =
+          `r_${minBefore}`;
 
-      const hhmm = `${String(
-        Math.floor(total / 60)
-      ).padStart(2, "0")}:${String(
-        total % 60
-      ).padStart(2, "0")}`;
+        if (
+          b.remindedAt &&
+          b.remindedAt.has(
+            remindKey
+          )
+        ) {
+          continue;
+        }
 
-      if (hhmm === currentHHMM) {
+        const [h, m] =
+          b.time
+            .split(":")
+            .map(Number);
 
-        try {
+        const total =
+          h * 60 +
+          m -
+          minBefore;
 
-          const msg =
-            minBefore === 60
-              ? `🔔 อีก 1 ชั่วโมงถึงเวลานวดค่ะ\n\n⏰ ${b.time}\n🛁 ${b.room}`
-              : `⏰ อีก 15 นาทีถึงเวลานวดค่ะ\n\n⏰ ${b.time}\n🛁 ${b.room}`;
+        const hhmm =
+          `${String(
+            Math.floor(
+              total / 60
+            )
+          ).padStart(
+            2,
+            "0"
+          )}:${String(
+            total % 60
+          ).padStart(2, "0")}`;
 
-          await client.pushMessage(
-            b.userId,
-            {
-              type: "text",
-              text: msg,
-            }
-          );
+        if (
+          hhmm === currentHHMM
+        ) {
 
-          bookingList[
-            id
-          ].remindedAt.add(remindKey);
+          try {
 
-        } catch (e) {
-          console.log(e.message);
+            const msg =
+              minBefore === 60
+                ? `🔔 อีก 1 ชั่วโมงถึงเวลานวด\n\n⏰ ${b.time}\n💆 ${b.course}\n🛁 ${b.room}`
+                : `⏰ อีก 15 นาทีถึงเวลานวด\n\n⏰ ${b.time}\n💆 ${b.course}\n🛁 ${b.room}`;
+
+            await client.pushMessage(
+              b.userId,
+              {
+                type: "text",
+                text: msg,
+              }
+            );
+
+            bookingList[
+              id
+            ].remindedAt.add(
+              remindKey
+            );
+
+          } catch (e) {
+            console.log(
+              e.message
+            );
+          }
         }
       }
     }
   }
-});
+);
 
 // ============================================================
 // MAIN MENU
 // ============================================================
 
-async function sendMainMenu(event) {
+async function sendMainMenu(
+  event
+) {
 
   return client.replyMessage(
     event.replyToken,
     {
       type: "text",
+
       text:
-        "🛁 ระบบจองห้องนวด\nกรุณาเลือกเมนู 👇",
+        "🛁 ระบบจองห้องนวด",
 
       quickReply: {
         items: [
+
           {
             type: "action",
+
             action: {
               type: "message",
-              label: "📅 จองล่วงหน้า",
-              text: "จองห้องนวด",
+              label:
+                "📅 จองล่วงหน้า",
+              text:
+                "จองห้องนวด",
             },
           },
 
           {
             type: "action",
+
             action: {
               type: "message",
-              label: "🚶 Walk in",
-              text: "walk in",
+              label:
+                "🚶 Walk in",
+              text:
+                "walk in",
             },
           },
 
           {
             type: "action",
+
             action: {
               type: "message",
-              label: "❌ ยกเลิกการจอง",
-              text: "ยกเลิกการจอง",
+              label:
+                "❌ ยกเลิกการจอง",
+              text:
+                "ยกเลิกการจอง",
             },
           },
         ],
@@ -355,9 +435,12 @@ async function sendMainMenu(event) {
 // WALK IN
 // ============================================================
 
-async function sendWalkInStatus(event) {
+async function sendWalkInStatus(
+  event
+) {
 
-  const today = getTodayStr();
+  const today =
+    getTodayStr();
 
   const currentSlot =
     getCurrentTimeSlot();
@@ -368,16 +451,18 @@ async function sendWalkInStatus(event) {
       event.replyToken,
       {
         type: "text",
+
         text:
           "⏰ เปิดบริการ 10:00 - 20:00 น.",
       }
     );
   }
 
-  const available = getAvailableRooms(
-    today,
-    currentSlot
-  );
+  const available =
+    getAvailableRooms(
+      today,
+      currentSlot
+    );
 
   if (!available.length) {
 
@@ -391,9 +476,10 @@ async function sendWalkInStatus(event) {
       event.replyToken,
       {
         type: "text",
+
         text:
-          `❌ เวลา ${currentSlot} เต็มแล้วค่ะ\n\n` +
-          `📩 หากมีการยกเลิก ระบบจะแจ้งเตือนให้อัตโนมัติ`,
+          `❌ เวลา ${currentSlot} เต็มแล้ว\n\n` +
+          `📩 หากมีการยกเลิก ระบบจะแจ้งเตือนอัตโนมัติ`,
       }
     );
   }
@@ -402,11 +488,14 @@ async function sendWalkInStatus(event) {
     event.replyToken,
     {
       type: "text",
+
       text:
         `✅ มีห้องว่าง\n\n` +
         `⏰ ${currentSlot}\n\n` +
         available
-          .map((r) => `• ${r}`)
+          .map(
+            (r) => `• ${r}`
+          )
           .join("\n"),
     }
   );
@@ -425,7 +514,9 @@ async function sendBookingStart(
     getTomorrowStr();
 
   const freeSlots =
-    getAvailableSlots(tomorrow);
+    getAvailableSlots(
+      tomorrow
+    );
 
   if (!freeSlots.length) {
 
@@ -433,6 +524,7 @@ async function sendBookingStart(
       event.replyToken,
       {
         type: "text",
+
         text:
           "❌ วันพรุ่งนี้เต็มแล้วค่ะ",
       }
@@ -448,19 +540,26 @@ async function sendBookingStart(
     event.replyToken,
     {
       type: "text",
+
       text:
         `📅 เลือกเวลาที่ต้องการ\n` +
-        `${formatDateTH(tomorrow)}`,
+        `${formatDateTH(
+          tomorrow
+        )}`,
 
       quickReply: {
-        items: freeSlots.map((slot) => ({
-          type: "action",
-          action: {
-            type: "message",
-            label: slot,
-            text: `เลือกเวลา:${slot}`,
-          },
-        })),
+        items: freeSlots.map(
+          (slot) => ({
+            type: "action",
+
+            action: {
+              type: "message",
+              label: slot,
+              text:
+                `เลือกเวลา:${slot}`,
+            },
+          })
+        ),
       },
     }
   );
@@ -479,9 +578,14 @@ async function handleBookingFlow(
   const state =
     pendingBooking[userId];
 
-  // ----------------------------------------------------------
+  // ==========================================================
+  // CHOOSE TIME
+  // ==========================================================
 
-  if (state.step === "choose_time") {
+  if (
+    state.step ===
+    "choose_time"
+  ) {
 
     const match =
       text.match(
@@ -489,44 +593,15 @@ async function handleBookingFlow(
       );
 
     if (!match) {
-
-      delete pendingBooking[userId];
-
-      return client.replyMessage(
-        event.replyToken,
-        {
-          type: "text",
-          text:
-            "❌ ระบบยกเลิกขั้นตอนเดิมแล้ว กรุณาเริ่มใหม่ค่ะ",
-        }
-      );
+      return;
     }
 
     const time = match[1];
 
-    const available =
-      getAvailableRooms(
-        state.date,
-        time
-      );
-
-    if (!available.length) {
-
-      delete pendingBooking[userId];
-
-      return client.replyMessage(
-        event.replyToken,
-        {
-          type: "text",
-          text:
-            "❌ เวลานี้เต็มแล้ว กรุณาจองใหม่",
-        }
-      );
-    }
-
     pendingBooking[userId] = {
       ...state,
-      step: "choose_room",
+      step:
+        "choose_course",
       time,
     };
 
@@ -534,17 +609,26 @@ async function handleBookingFlow(
       event.replyToken,
       {
         type: "text",
+
         text:
-          `⏰ ${time}\nเลือกห้อง 👇`,
+          `⏰ ${time}\n\n` +
+          `💆 กรุณาเลือกคอร์ส`,
 
         quickReply: {
-          items: available.map(
-            (room) => ({
-              type: "action",
+          items: COURSES.map(
+            (course) => ({
+              type:
+                "action",
+
               action: {
-                type: "message",
-                label: room,
-                text: `เลือกห้อง:${room}`,
+                type:
+                  "message",
+
+                label:
+                  course,
+
+                text:
+                  `เลือกคอร์ส:${course}`,
               },
             })
           ),
@@ -553,28 +637,110 @@ async function handleBookingFlow(
     );
   }
 
-  // ----------------------------------------------------------
+  // ==========================================================
+  // CHOOSE COURSE
+  // ==========================================================
 
-  if (state.step === "choose_room") {
+  if (
+    state.step ===
+    "choose_course"
+  ) {
 
     const match =
-      text.match(/^เลือกห้อง:(.+)$/);
+      text.match(
+        /^เลือกคอร์ส:(.+)$/
+      );
 
     if (!match) {
+      return;
+    }
 
-      delete pendingBooking[userId];
+    const course =
+      match[1];
+
+    const available =
+      getAvailableRooms(
+        state.date,
+        state.time
+      );
+
+    if (!available.length) {
+
+      delete pendingBooking[
+        userId
+      ];
 
       return client.replyMessage(
         event.replyToken,
         {
           type: "text",
+
           text:
-            "❌ ระบบยกเลิกขั้นตอนเดิมแล้ว กรุณาเริ่มใหม่ค่ะ",
+            "❌ เวลานี้เต็มแล้ว กรุณาจองใหม่",
         }
       );
     }
 
-    const room = match[1];
+    pendingBooking[userId] = {
+      ...state,
+      step:
+        "choose_room",
+      course,
+    };
+
+    return client.replyMessage(
+      event.replyToken,
+      {
+        type: "text",
+
+        text:
+          `💆 ${course}\n\n` +
+          `🛁 กรุณาเลือกห้อง`,
+
+        quickReply: {
+          items:
+            available.map(
+              (room) => ({
+                type:
+                  "action",
+
+                action: {
+                  type:
+                    "message",
+
+                  label:
+                    room,
+
+                  text:
+                    `เลือกห้อง:${room}`,
+                },
+              })
+            ),
+        },
+      }
+    );
+  }
+
+  // ==========================================================
+  // CHOOSE ROOM
+  // ==========================================================
+
+  if (
+    state.step ===
+    "choose_room"
+  ) {
+
+    const match =
+      text.match(
+        /^เลือกห้อง:(.+)$/
+      );
+
+    if (!match) {
+      return;
+    }
+
+    const room =
+      match[1];
 
     pendingBooking[userId] = {
       ...state,
@@ -585,10 +751,15 @@ async function handleBookingFlow(
     return client.replyMessage(
       event.replyToken,
       {
-        type: "template",
-        altText: "ยืนยันการจอง",
+        type:
+          "template",
+
+        altText:
+          "ยืนยันการจอง",
+
         template: {
-          type: "confirm",
+          type:
+            "confirm",
 
           text:
             `📋 ยืนยันการจอง\n\n` +
@@ -596,19 +767,31 @@ async function handleBookingFlow(
               state.date
             )}\n` +
             `⏰ ${state.time}\n` +
+            `💆 ${state.course}\n` +
             `🛁 ${room}`,
 
           actions: [
+
             {
-              type: "message",
-              label: "✅ ยืนยัน",
-              text: "ยืนยันการจอง",
+              type:
+                "message",
+
+              label:
+                "✅ ยืนยัน",
+
+              text:
+                "ยืนยันการจอง",
             },
 
             {
-              type: "message",
-              label: "❌ ยกเลิก",
-              text: "ยกเลิกขั้นตอนจอง",
+              type:
+                "message",
+
+              label:
+                "❌ ยกเลิก",
+
+              text:
+                "ยกเลิกขั้นตอนจอง",
             },
           ],
         },
@@ -616,41 +799,52 @@ async function handleBookingFlow(
     );
   }
 
-  // ----------------------------------------------------------
+  // ==========================================================
+  // CONFIRM
+  // ==========================================================
 
-  if (state.step === "confirm") {
+  if (
+    state.step ===
+    "confirm"
+  ) {
 
-    if (text !== "ยืนยันการจอง") {
+    if (
+      text !==
+      "ยืนยันการจอง"
+    ) {
 
-      delete pendingBooking[userId];
+      delete pendingBooking[
+        userId
+      ];
 
-      return client.replyMessage(
-        event.replyToken,
-        {
-          type: "text",
-          text:
-            "❌ ยกเลิกขั้นตอนจองแล้วค่ะ",
-        }
-      );
+      return;
     }
 
-    const bookingId = genBookingId();
+    const bookingId =
+      genBookingId();
 
     bookingList[bookingId] = {
       userId,
       date: state.date,
       time: state.time,
+      course:
+        state.course,
       room: state.room,
-      status: "active",
-      remindedAt: new Set(),
+      status:
+        "active",
+      remindedAt:
+        new Set(),
     };
 
-    delete pendingBooking[userId];
+    delete pendingBooking[
+      userId
+    ];
 
     return client.replyMessage(
       event.replyToken,
       {
         type: "text",
+
         text:
           `🎉 จองสำเร็จ\n\n` +
           `🔖 ${bookingId}\n` +
@@ -658,6 +852,7 @@ async function handleBookingFlow(
             state.date
           )}\n` +
           `⏰ ${state.time}\n` +
+          `💆 ${state.course}\n` +
           `🛁 ${state.room}\n\n` +
           `🔔 มีแจ้งเตือนก่อนนัด`,
       }
@@ -675,19 +870,25 @@ async function startCancelFlow(
 ) {
 
   const activeBookings =
-    Object.entries(bookingList)
-      .filter(
-        ([, b]) =>
-          b.userId === userId &&
-          b.status === "active"
-      );
+    Object.entries(
+      bookingList
+    ).filter(
+      ([, b]) =>
+        b.userId ===
+          userId &&
+        b.status ===
+          "active"
+    );
 
-  if (!activeBookings.length) {
+  if (
+    !activeBookings.length
+  ) {
 
     return client.replyMessage(
       event.replyToken,
       {
         type: "text",
+
         text:
           "❌ ไม่พบรายการจอง",
       }
@@ -698,20 +899,29 @@ async function startCancelFlow(
     event.replyToken,
     {
       type: "text",
+
       text:
         "📋 เลือกรายการที่ต้องการยกเลิก",
 
       quickReply: {
-        items: activeBookings.map(
-          ([id, b]) => ({
-            type: "action",
-            action: {
-              type: "message",
-              label: `${b.time} ${b.room}`,
-              text: `ยกเลิก:${id}`,
-            },
-          })
-        ),
+        items:
+          activeBookings.map(
+            ([id, b]) => ({
+              type:
+                "action",
+
+              action: {
+                type:
+                  "message",
+
+                label:
+                  `${b.time} ${b.room}`,
+
+                text:
+                  `ยกเลิก:${id}`,
+              },
+            })
+          ),
       },
     }
   );
@@ -728,17 +938,11 @@ async function confirmCancelBooking(
 
   if (
     !booking ||
-    booking.userId !== userId
+    booking.userId !==
+      userId
   ) {
 
-    return client.replyMessage(
-      event.replyToken,
-      {
-        type: "text",
-        text:
-          "❌ ไม่พบรายการจอง",
-      }
-    );
+    return;
   }
 
   pendingCancel[userId] = {
@@ -748,10 +952,15 @@ async function confirmCancelBooking(
   return client.replyMessage(
     event.replyToken,
     {
-      type: "template",
-      altText: "ยืนยันยกเลิก",
+      type:
+        "template",
+
+      altText:
+        "ยืนยันยกเลิก",
+
       template: {
-        type: "confirm",
+        type:
+          "confirm",
 
         text:
           `⚠️ ยืนยันยกเลิก?\n\n` +
@@ -759,19 +968,31 @@ async function confirmCancelBooking(
             booking.date
           )}\n` +
           `⏰ ${booking.time}\n` +
+          `💆 ${booking.course}\n` +
           `🛁 ${booking.room}`,
 
         actions: [
+
           {
-            type: "message",
-            label: "✅ ยืนยัน",
-            text: "ยืนยันยกเลิก",
+            type:
+              "message",
+
+            label:
+              "✅ ยืนยัน",
+
+            text:
+              "ยืนยันยกเลิก",
           },
 
           {
-            type: "message",
-            label: "❌ ไม่ยกเลิก",
-            text: "ไม่ยกเลิก",
+            type:
+              "message",
+
+            label:
+              "❌ ไม่ยกเลิก",
+
+            text:
+              "ไม่ยกเลิก",
           },
         ],
       },
@@ -790,25 +1011,25 @@ async function executeCancelBooking(
   if (!state) return;
 
   const booking =
-    bookingList[state.bookingId];
+    bookingList[
+      state.bookingId
+    ];
 
   if (!booking) {
 
-    delete pendingCancel[userId];
+    delete pendingCancel[
+      userId
+    ];
 
-    return client.replyMessage(
-      event.replyToken,
-      {
-        type: "text",
-        text:
-          "❌ ไม่พบรายการจอง",
-      }
-    );
+    return;
   }
 
-  booking.status = "cancelled";
+  booking.status =
+    "cancelled";
 
-  delete pendingCancel[userId];
+  delete pendingCancel[
+    userId
+  ];
 
   await notifyWaitlist(
     booking.date,
@@ -819,12 +1040,14 @@ async function executeCancelBooking(
     event.replyToken,
     {
       type: "text",
+
       text:
         `✅ ยกเลิกการจองสำเร็จ\n\n` +
         `📅 ${formatDateTH(
           booking.date
         )}\n` +
         `⏰ ${booking.time}\n` +
+        `💆 ${booking.course}\n` +
         `🛁 ${booking.room}`,
     }
   );
@@ -834,11 +1057,15 @@ async function executeCancelBooking(
 // MESSAGE HANDLER
 // ============================================================
 
-async function handleMessage(event) {
+async function handleMessage(
+  event
+) {
 
   if (
-    event.type !== "message" ||
-    event.message.type !== "text"
+    event.type !==
+      "message" ||
+    event.message.type !==
+      "text"
   ) {
     return;
   }
@@ -849,34 +1076,41 @@ async function handleMessage(event) {
   const text =
     event.message.text.trim();
 
-  const lower = text.toLowerCase();
+  const lower =
+    text.toLowerCase();
 
   // ==========================================================
   // CANCEL CONFIRM
   // ==========================================================
 
-  if (pendingCancel[userId]) {
+  if (
+    pendingCancel[userId]
+  ) {
 
-    if (text === "ยืนยันยกเลิก") {
+    if (
+      text ===
+      "ยืนยันยกเลิก"
+    ) {
+
       return executeCancelBooking(
         event,
         userId
       );
     }
 
-    if (text === "ไม่ยกเลิก") {
+    if (
+      text ===
+      "ไม่ยกเลิก"
+    ) {
 
-      delete pendingCancel[userId];
+      delete pendingCancel[
+        userId
+      ];
 
-      return client.replyMessage(
-        event.replyToken,
-        {
-          type: "text",
-          text:
-            "✅ ยังคงรายการจองเดิมไว้ค่ะ",
-        }
-      );
+      return;
     }
+
+    return;
   }
 
   // ==========================================================
@@ -884,7 +1118,9 @@ async function handleMessage(event) {
   // ==========================================================
 
   const cancelMatch =
-    text.match(/^ยกเลิก:(BK\d+)$/);
+    text.match(
+      /^ยกเลิก:(BK\d+)$/
+    );
 
   if (cancelMatch) {
 
@@ -899,22 +1135,20 @@ async function handleMessage(event) {
   // BOOKING FLOW
   // ==========================================================
 
-  if (pendingBooking[userId]) {
+  if (
+    pendingBooking[userId]
+  ) {
 
     if (
-      text === "ยกเลิกขั้นตอนจอง"
+      text ===
+      "ยกเลิกขั้นตอนจอง"
     ) {
 
-      delete pendingBooking[userId];
+      delete pendingBooking[
+        userId
+      ];
 
-      return client.replyMessage(
-        event.replyToken,
-        {
-          type: "text",
-          text:
-            "❌ ยกเลิกขั้นตอนจองแล้ว",
-        }
-      );
+      return;
     }
 
     return handleBookingFlow(
@@ -929,34 +1163,6 @@ async function handleMessage(event) {
   // ==========================================================
 
   if (
-  /(ยกเลิกการจอง|ยกเลิก)/i.test(lower)
-) {
-
-  return startCancelFlow(
-    event,
-    userId
-  );
-}
-
-if (
-  /(จอง|book|reserve)/i.test(lower) &&
-  !/(ยกเลิก)/i.test(lower)
-) {
-
-  return sendBookingStart(
-    event,
-    userId
-  );
-}
-
-if (
-  /(walk.?in|ห้องว่าง|มีห้อง)/i.test(lower)
-) {
-
-  return sendWalkInStatus(event);
-}
-
-  if (
     /(ยกเลิกการจอง|ยกเลิก)/i.test(
       lower
     )
@@ -968,7 +1174,33 @@ if (
     );
   }
 
-  return sendMainMenu(event);
+  if (
+    /(จอง|book|reserve)/i.test(
+      lower
+    ) &&
+    !/(ยกเลิก)/i.test(
+      lower
+    )
+  ) {
+
+    return sendBookingStart(
+      event,
+      userId
+    );
+  }
+
+  if (
+    /(walk.?in|ห้องว่าง|มีห้อง)/i.test(
+      lower
+    )
+  ) {
+
+    return sendWalkInStatus(
+      event
+    );
+  }
+
+  return;
 }
 
 // ============================================================
@@ -977,7 +1209,9 @@ if (
 
 app.post(
   "/webhook",
+
   line.middleware(config),
+
   (req, res) => {
 
     Promise.all(
@@ -991,8 +1225,12 @@ app.post(
         })
       )
       .catch((err) => {
+
         console.log(err);
-        res.status(500).end();
+
+        res
+          .status(500)
+          .end();
       });
   }
 );
@@ -1002,7 +1240,10 @@ app.post(
 // ============================================================
 
 app.get("/", (_, res) => {
-  res.send("LINE BOT RUNNING ✅");
+
+  res.send(
+    "LINE BOT RUNNING ✅"
+  );
 });
 
 // ============================================================
