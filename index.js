@@ -26,14 +26,14 @@ const client = new line.Client(config);
 
 // ห้องทั้งหมด
 const ROOMS = [
-  "ห้อง A",
-  "ห้อง B",
-  "ห้อง C",
-  "ห้อง D",
+  "ห้อง AGAVE",
+  "ห้อง LIFE PLANT",
+  "ห้อง ENTADA",
+  
 ];
 
 // ห้องสำหรับ LPG (ห้องเดียว)
-const LPG_ROOM = "ห้อง A";
+const LPG_ROOM = "ห้อง AGAVE";
 
 // Capacity ต่อ slot: LPG = 1, อื่นๆ = 2
 const COURSE_CAPACITY = {
@@ -55,8 +55,7 @@ const SLOTS = [
   "16:00",
   "17:00",
   "18:00",
-  "19:00",
-  "20:00",
+  
 ];
 
 const REMIND_BEFORE_MIN = [60, 15];
@@ -671,7 +670,10 @@ async function handleMessage(event) {
   if (pendingBooking[userId]) {
     if (text === "ยกเลิกขั้นตอนจอง") {
       delete pendingBooking[userId];
-      return;
+      return client.replyMessage(event.replyToken, {
+        type: "text",
+        text: "↩️ ยกเลิกขั้นตอนการจองแล้วค่ะ",
+      });
     }
     return handleBookingFlow(event, userId, text);
   }
